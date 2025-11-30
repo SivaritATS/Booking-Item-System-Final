@@ -161,15 +161,17 @@ const fetchProducts = async () => {
     const contract = new ethers.Contract(contractAddress, abi, provider);
     const data = await contract.getProducts();
 
-    products.value = data.map((p) => ({
-      id: p.id,
-      name: p.name,
-      price: p.price,
-      maxSlots: p.maxSlots,
-      bookedSlots: p.bookedSlots,
-      imageUrl: p.imageUrl,
-      active: p.active,
-    }));
+    products.value = data
+      .filter((p) => p.active) // แสดงเฉพาะสินค้าที่ Active เท่านั้น
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        maxSlots: p.maxSlots,
+        bookedSlots: p.bookedSlots,
+        imageUrl: p.imageUrl,
+        active: p.active,
+      }));
   } catch (error) {
     console.error("Error fetching products:", error);
     alert(

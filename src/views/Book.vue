@@ -8,8 +8,8 @@
 
       <div v-else-if="product" class="booking-card fade-in">
         <div class="card-header">
-          <h1>🎫 Confirm Your Booking</h1>
-          <p>Review the details before confirming your purchase</p>
+          <h1>🎫 ยืนยันการจอง</h1>
+          <p>ตรวจสอบรโายละเอียดก่อนการยืนยันการจอง</p>
         </div>
 
         <div class="product-showcase">
@@ -28,7 +28,7 @@
               <div class="info-item">
                 <div class="info-icon">💰</div>
                 <div class="info-content">
-                  <span class="info-label">Price</span>
+                  <span class="info-label">ราคา</span>
                   <span class="info-value"
                     >{{ formatEther(product.price) }} ETH</span
                   >
@@ -38,7 +38,7 @@
               <div class="info-item">
                 <div class="info-icon">📊</div>
                 <div class="info-content">
-                  <span class="info-label">Slots Available</span>
+                  <span class="info-label">จำนวนที่มี</span>
                   <span class="info-value"
                     >{{ product.maxSlots - product.bookedSlots }} /
                     {{ product.maxSlots }}</span
@@ -49,7 +49,7 @@
               <div class="info-item">
                 <div class="info-icon">🔒</div>
                 <div class="info-content">
-                  <span class="info-label">Payment Method</span>
+                  <span class="info-label">วิธีการชำระเงิน</span>
                   <span class="info-value">MetaMask (Sepolia)</span>
                 </div>
               </div>
@@ -67,12 +67,12 @@
               >
                 <span v-if="booking">⏳ Processing...</span>
                 <span v-else
-                  >✨ Confirm & Pay {{ formatEther(product.price) }} ETH</span
+                  >✨ ยืนยันการจอง {{ formatEther(product.price) }} ETH</span
                 >
               </button>
 
               <button @click="$router.push('/')" class="cancel-button">
-                ← Back to Products
+                ← กลับหน้าแรก
               </button>
             </div>
 
@@ -83,10 +83,10 @@
 
       <div v-else class="error-state">
         <div class="error-icon">😕</div>
-        <h3>Product Not Found</h3>
-        <p>The product you're looking for doesn't exist.</p>
+        <h3>สินค้าไม่พบ</h3>
+        <p>สินค้าที่คุณกำลังมองหาไม่มีอยู่</p>
         <button @click="$router.push('/')" class="back-button">
-          ← Back to Home
+          ← กลับหน้าแรก
         </button>
       </div>
     </div>
@@ -97,6 +97,7 @@
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ethers } from "ethers";
+import Swal from "sweetalert2";
 import abi from "../abi/BookingContract.json";
 
 const route = useRoute();
@@ -148,14 +149,27 @@ const fetchProduct = async () => {
   } catch (err) {
     console.error("Error fetching product:", err);
     error.value = "Failed to load product details.";
+    Swal.fire({
+      icon: 'error',
+      title: 'ไม่สามารถโหลดข้อมูลสินค้า',
+      text: 'กรุณาลองใหม่อีกครั้งในภายหลัง',
+      confirmButtonColor: '#ef4444'
+    });
   } finally {
     loading.value = false;
   }
 };
 
 const bookProduct = async () => {
-  if (!window.ethereum)
-    return alert("Please install MetaMask to book products.");
+  if (!window.ethereum) {
+    Swal.fire({
+      icon: 'error',
+      title: 'ไม่พบ MetaMask',
+      text: 'กรุณาติดตั้ง MetaMask เพื่อทำการจองสินค้า',
+      confirmButtonColor: '#6366f1'
+    });
+    return;
+  }
 
   booking.value = true;
   error.value = "";
@@ -166,16 +180,42 @@ const bookProduct = async () => {
     const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
     const contract = new ethers.Contract(contractAddress, abi, signer);
 
+    // ส่ง transaction
     const tx = await contract.bookProduct(productId, {
       value: product.value.price,
     });
+
+    // แสดง popup รอ transaction
+    Swal.fire({
+      title: 'กำลังดำเนินการจอง...',
+      text: 'กรุณารอสักครู่ Transaction กำลังถูกยืนยัน',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
     await tx.wait();
 
-    alert("🎉 Booking successful!");
-    router.push("/");
+    Swal.fire({
+      icon: 'success',
+      title: 'จองสำเร็จ!',
+      text: 'ขอบคุณที่ใช้บริการ',
+      confirmButtonColor: '#10b981',
+      timer: 2000
+    }).then(() => {
+      router.push("/");
+    });
+
   } catch (err) {
     console.error("Booking error:", err);
     error.value = err.reason || err.message || "Booking failed.";
+    Swal.fire({
+      icon: 'error',
+      title: 'การจองล้มเหลว',
+      text: error.value,
+      confirmButtonColor: '#ef4444'
+    });
   } finally {
     booking.value = false;
   }

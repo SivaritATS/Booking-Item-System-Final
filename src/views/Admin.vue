@@ -133,6 +133,7 @@
                 <th>ราคา</th>
                 <th>ยอดขาย</th>
                 <th>สถานะ</th>
+                <th>จัดการ</th>
               </tr>
             </thead>
             <tbody>
@@ -197,6 +198,30 @@
                     {{ getStatusText(product) }}
                   </span>
                 </td>
+
+                <!-- Actions Column -->
+                <td>
+                  <div class="action-buttons">
+                    <button 
+                      v-if="product.active"
+                      @click="deleteProduct(product)"
+                      class="action-btn delete-btn"
+                      title="ลบสินค้า"
+                      :disabled="updatingStatus === product.id"
+                    >
+                      🗑️
+                    </button>
+                    <button 
+                      v-else
+                      @click="toggleProductStatus(product.id, true)"
+                      class="action-btn restore-btn"
+                      title="กู้คืนสินค้า"
+                      :disabled="updatingStatus === product.id"
+                    >
+                      ♻️
+                    </button>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -227,6 +252,7 @@
 
 import { ref, onMounted } from "vue";
 import { ethers } from "ethers";
+import Swal from "sweetalert2";
 import abi from "../abi/BookingContract.json";
 
 // ============================================
@@ -268,7 +294,7 @@ const isOutOfStock = (product) => {
  * ดึงข้อความสถานะของสินค้า
  */
 const getStatusText = (product) => {
-  if (!product.active) return "⏸️ ปิดการขาย";
+  if (!product.active) return "🗑️ ถูกลบแล้ว";
   if (isOutOfStock(product)) return "❌ สินค้าหมด";
   return "✅ เปิดขาย";
 };
@@ -311,7 +337,12 @@ const loadProducts = async () => {
   loading.value = true;
   try {
     if (!window.ethereum) {
-      alert("❌ กรุณาติดตั้ง MetaMask เพื่อใช้งานระบบ");
+      Swal.fire({
+        icon: 'error',
+        title: 'ไม่พบ MetaMask',
+        text: 'กรุณาติดตั้ง MetaMask เพื่อใช้งานระบบ',
+        confirmButtonColor: '#6366f1'
+      });
       loading.value = false;
       return;
     }
@@ -335,9 +366,12 @@ const loadProducts = async () => {
     }));
   } catch (error) {
     console.error("Error loading products:", error);
-    alert(
-      "❌ ไม่สามารถโหลดข้อมูลได้\n\nกรุณาตรวจสอบ:\n1. MetaMask เชื่อมต่อแล้ว\n2. เชื่อมต่อ Sepolia Network\n3. Contract Address ถูกต้อง"
-    );
+    Swal.fire({
+      icon: 'error',
+      title: 'ไม่สามารถโหลดข้อมูลได้',
+      html: 'กรุณาตรวจสอบ:<br>1. MetaMask เชื่อมต่อแล้ว<br>2. เชื่อมต่อ Sepolia Network<br>3. Contract Address ถูกต้อง',
+      confirmButtonColor: '#ef4444'
+    });
   } finally {
     loading.value = false;
   }
@@ -348,7 +382,12 @@ const loadProducts = async () => {
  */
 const addProduct = async () => {
   if (!window.ethereum) {
-    alert("❌ กรุณาติดตั้ง MetaMask");
+    Swal.fire({
+      icon: 'error',
+      title: 'ไม่พบ MetaMask',
+      text: 'กรุณาติดตั้ง MetaMask',
+      confirmButtonColor: '#6366f1'
+    });
     return;
   }
 
@@ -372,10 +411,26 @@ const addProduct = async () => {
       newProduct.value.imageUrl
     );
 
+    // แสดง popup รอ transaction
+    Swal.fire({
+      title: 'กำลังบันทึกข้อมูล...',
+      text: 'กรุณารอสักครู่ Transaction กำลังถูกยืนยัน',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
     // รอให้ transaction ถูก confirm
     await tx.wait();
 
-    alert("🎉 เพิ่มสินค้าสำเร็จ!");
+    Swal.fire({
+      icon: 'success',
+      title: 'เพิ่มสินค้าสำเร็จ!',
+      text: 'สินค้าของคุณถูกเพิ่มลงใน Blockchain แล้ว',
+      confirmButtonColor: '#10b981',
+      timer: 2000
+    });
     
     // รีเซ็ตฟอร์ม
     newProduct.value = { name: "", price: "", maxSlots: "", imageUrl: "" };
@@ -385,8 +440,34 @@ const addProduct = async () => {
   } catch (err) {
     console.error("Error adding product:", err);
     addError.value = err.reason || err.message || "ไม่สามารถเพิ่มสินค้าได้";
+    Swal.fire({
+      icon: 'error',
+      title: 'เกิดข้อผิดพลาด',
+      text: addError.value,
+      confirmButtonColor: '#ef4444'
+    });
   } finally {
     adding.value = false;
+  }
+};
+
+/**
+ * ลบสินค้า (ปิดการขาย)
+ */
+const deleteProduct = async (product) => {
+  const result = await Swal.fire({
+    title: 'ยืนยันการลบ?',
+    text: "สินค้าจะถูกซ่อนจากหน้าแรก (สามารถกู้คืนได้)",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#cbd5e1',
+    confirmButtonText: 'ใช่, ลบเลย',
+    cancelButtonText: 'ยกเลิก'
+  });
+
+  if (result.isConfirmed) {
+    await toggleProductStatus(product.id, false);
   }
 };
 
@@ -395,7 +476,12 @@ const addProduct = async () => {
  */
 const toggleProductStatus = async (productId, newStatus) => {
   if (!window.ethereum) {
-    alert("❌ กรุณาติดตั้ง MetaMask");
+    Swal.fire({
+      icon: 'error',
+      title: 'ไม่พบ MetaMask',
+      text: 'กรุณาติดตั้ง MetaMask',
+      confirmButtonColor: '#6366f1'
+    });
     return;
   }
 
@@ -407,20 +493,39 @@ const toggleProductStatus = async (productId, newStatus) => {
     const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
     const contract = new ethers.Contract(contractAddress, abi, signer);
 
-    // เรียกฟังก์ชัน setProductActive ใน Smart Contract
-    const tx = await contract.setProductActive(productId, newStatus);
+    // เรียกฟังก์ชัน toggleProductStatus ใน Smart Contract (สลับสถานะ Active/Inactive)
+    const tx = await contract.toggleProductStatus(productId);
     
+    Swal.fire({
+      title: 'กำลังอัพเดทสถานะ...',
+      text: 'กรุณารอสักครู่',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
     // รอให้ transaction ถูก confirm
     await tx.wait();
 
-    const statusText = newStatus ? "เปิดการขาย" : "ปิดการขาย";
-    alert(`✅ ${statusText}สำเร็จ!`);
+    const statusText = newStatus ? "กู้คืน" : "ลบ";
+    Swal.fire({
+      icon: 'success',
+      title: `${statusText}สำเร็จ!`,
+      timer: 1500,
+      showConfirmButton: false
+    });
     
     // โหลดข้อมูลใหม่
     loadProducts();
   } catch (err) {
     console.error("Error toggling product status:", err);
-    alert(`❌ ไม่สามารถอัพเดทสถานะได้: ${err.reason || err.message}`);
+    Swal.fire({
+      icon: 'error',
+      title: 'เกิดข้อผิดพลาด',
+      text: `ไม่สามารถอัพเดทสถานะได้: ${err.reason || err.message}`,
+      confirmButtonColor: '#ef4444'
+    });
   } finally {
     updatingStatus.value = null;
   }
@@ -575,6 +680,39 @@ onMounted(() => {
   margin-bottom: 2rem;
   flex-wrap: wrap;
   gap: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.delete-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.delete-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.restore-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.restore-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ============================================
