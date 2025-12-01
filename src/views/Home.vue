@@ -116,51 +116,66 @@ import { ethers } from "ethers";
 import abi from "../abi/BookingContract.json";
 import { useWallet } from "../store/wallet";
 
+// ตัวแปรเก็บข้อมูลสินค้า
 const products = ref([]);
+// สถานะการโหลดข้อมูล
 const loading = ref(true);
+// Router สำหรับเปลี่ยนหน้า
 const router = useRouter();
+// ดึงฟังก์ชันจาก store/wallet มาใช้
 const { isConnected, connectWallet } = useWallet();
 
+// ฟังก์ชันเชื่อมต่อกระเป๋าเงิน
 const handleConnect = async () => {
   const success = await connectWallet();
   if (success) {
-    fetchProducts();
+    fetchProducts(); // ถ้าเชื่อมต่อสำเร็จ ให้ดึงข้อมูลสินค้า
   }
 };
 
+// แปลงหน่วยเงินจาก Wei เป็น Ether
 const formatEther = (value) => ethers.formatEther(value);
 
+// คำนวณสีของสถานะสินค้าตามจำนวนที่เหลือ
 const getSlotClass = (product) => {
   const percentage =
     (Number(product.bookedSlots) / Number(product.maxSlots)) * 100;
-  if (percentage >= 90) return "slots-critical";
-  if (percentage >= 50) return "slots-warning";
-  return "slots-available";
+  if (percentage >= 90) return "slots-critical"; // เหลือสินค้าน้อยมาก (สีแดง)
+  if (percentage >= 50) return "slots-warning";  // เหลือสินค้าปานกลาง (สีเหลือง)
+  return "slots-available"; // เหลือสินค้าเยอะ (สีเขียว)
 };
 
+// จัดการกรณีรูปภาพโหลดไม่สำเร็จ
 const handleImageError = (e) => {
   e.target.src =
     "https://via.placeholder.com/400x300/6366f1/ffffff?text=Product+Image";
 };
 
+// ไปยังหน้าจองสินค้า
 const goToBook = (id) => {
   router.push(`/book/${id}`);
 };
 
+// ดึงข้อมูลสินค้าจาก Blockchain
 const fetchProducts = async () => {
   try {
+    // ตรวจสอบว่ามี MetaMask หรือไม่
     if (!window.ethereum) {
       alert("กรุณาติดตั้ง MetaMask เพื่อใช้งานระบบ");
       loading.value = false;
       return;
     }
 
+    // เชื่อมต่อกับ Blockchain
     const provider = new ethers.BrowserProvider(window.ethereum);
     const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
 
+    // สร้าง Contract Instance
     const contract = new ethers.Contract(contractAddress, abi, provider);
+    // เรียกฟังก์ชัน getProducts จาก Smart Contract
     const data = await contract.getProducts();
 
+    // แปลงข้อมูลที่ได้ให้อยู่ในรูปแบบที่ใช้งานง่าย
     products.value = data
       .filter((p) => p.active) // แสดงเฉพาะสินค้าที่ Active เท่านั้น
       .map((p) => ({
@@ -178,13 +193,14 @@ const fetchProducts = async () => {
       "❌ ไม่สามารถโหลดข้อมูลได้\n\nกรุณาตรวจสอบ:\n1. MetaMask เชื่อมต่อแล้ว\n2. Contract Address ถูกต้อง\n3. เชื่อมต่อ Sepolia Network"
     );
   } finally {
-    loading.value = false;
+    loading.value = false; // ปิดสถานะการโหลด
   }
 };
 
+// เมื่อหน้าเว็บโหลดเสร็จ
 onMounted(() => {
   if (isConnected.value) {
-    fetchProducts();
+    fetchProducts(); // ถ้าเชื่อมต่อกระเป๋าแล้ว ให้ดึงข้อมูลสินค้าเลย
   } else {
     loading.value = false;
   }

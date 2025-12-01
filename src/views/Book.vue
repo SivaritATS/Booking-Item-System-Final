@@ -9,7 +9,7 @@
       <div v-else-if="product" class="booking-card fade-in">
         <div class="card-header">
           <h1>🎫 ยืนยันการจอง</h1>
-          <p>ตรวจสอบรโายละเอียดก่อนการยืนยันการจอง</p>
+          <p>ตรวจสอบรายละเอียดก่อนการยืนยันการจอง</p>
         </div>
 
         <div class="product-showcase">
@@ -100,28 +100,35 @@ import { ethers } from "ethers";
 import Swal from "sweetalert2";
 import abi from "../abi/BookingContract.json";
 
+// ใช้สำหรับดึงค่าจาก URL และเปลี่ยนหน้า
 const route = useRoute();
 const router = useRouter();
-const productId = route.params.id;
+const productId = route.params.id; // รับ ID สินค้าจาก URL
 
+// ตัวแปรเก็บข้อมูลสินค้า
 const product = ref(null);
-const loading = ref(true);
-const booking = ref(false);
-const error = ref("");
+const loading = ref(true); // สถานะโหลดข้อมูล
+const booking = ref(false); // สถานะกำลังจอง
+const error = ref(""); // เก็บข้อความ Error
 
+// แปลงหน่วยเงินจาก Wei เป็น Ether
 const formatEther = (value) => ethers.formatEther(value);
 
+// จัดการกรณีรูปภาพโหลดไม่สำเร็จ
 const handleImageError = (e) => {
   e.target.src =
     "https://via.placeholder.com/600x400/6366f1/ffffff?text=Product+Image";
 };
 
+// ดึงข้อมูลสินค้าจาก Blockchain
 const fetchProduct = async () => {
   try {
     let provider;
+    // ตรวจสอบว่ามี MetaMask หรือไม่
     if (window.ethereum) {
       provider = new ethers.BrowserProvider(window.ethereum);
     } else {
+      // ถ้าไม่มี MetaMask ให้ใช้ RPC URL สำรอง (ถ้ามี)
       const rpcUrl = import.meta.env.VITE_RPC_URL;
       if (rpcUrl && !rpcUrl.includes("YOUR_KEY")) {
         provider = new ethers.JsonRpcProvider(rpcUrl);
@@ -135,8 +142,10 @@ const fetchProduct = async () => {
     const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
     const contract = new ethers.Contract(contractAddress, abi, provider);
 
+    // เรียกข้อมูลสินค้าชิ้นเดียวจาก Smart Contract
     const p = await contract.products(productId);
 
+    // เก็บข้อมูลลงตัวแปร
     product.value = {
       id: p.id,
       name: p.name,
@@ -160,7 +169,9 @@ const fetchProduct = async () => {
   }
 };
 
+// ฟังก์ชันจองสินค้า
 const bookProduct = async () => {
+  // ตรวจสอบ MetaMask ก่อน
   if (!window.ethereum) {
     Swal.fire({
       icon: 'error',
@@ -175,12 +186,13 @@ const bookProduct = async () => {
   error.value = "";
 
   try {
+    // เชื่อมต่อ Blockchain ผ่าน MetaMask
     const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
+    const signer = await provider.getSigner(); // ต้องใช้ Signer เพื่อทำธุรกรรม (จ่ายเงิน)
     const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
     const contract = new ethers.Contract(contractAddress, abi, signer);
 
-    // ส่ง transaction
+    // ส่ง transaction จองสินค้า พร้อมแนบเงิน (value) ไปด้วย
     const tx = await contract.bookProduct(productId, {
       value: product.value.price,
     });
@@ -195,8 +207,10 @@ const bookProduct = async () => {
       }
     });
 
+    // รอให้ transaction เสร็จสมบูรณ์
     await tx.wait();
 
+    // แจ้งเตือนสำเร็จและกลับหน้าแรก
     Swal.fire({
       icon: 'success',
       title: 'จองสำเร็จ!',
@@ -221,6 +235,7 @@ const bookProduct = async () => {
   }
 };
 
+// เมื่อหน้าเว็บโหลดเสร็จ ให้ดึงข้อมูลสินค้า
 onMounted(() => {
   fetchProduct();
 });

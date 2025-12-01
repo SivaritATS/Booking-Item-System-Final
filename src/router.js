@@ -14,17 +14,17 @@ const router = createRouter({
   routes,
 });
 
-// Route guard for admin pages
+// ตรวจสอบว่าผู้ใช้ต้องการเข้าถึงหน้า Admin
 router.beforeEach((to, from, next) => {
   if (to.meta.requiresAdmin) {
-    // Check if wallet is connected
+    // ตรวจสอบว่ากระเป๋าถูกติดตั้งหรือไม่
     if (!window.ethereum) {
       alert("กรุณาติดตั้ง MetaMask เพื่อเข้าถึงหน้า Admin");
       next("/");
       return;
     }
 
-    // Check if user is admin
+    // ตรวจสอบว่าผู้ใช้เป็นผู้ดูแลหรือไม่
     window.ethereum.request({ method: "eth_accounts" }).then((accounts) => {
       const ADMIN_ADDRESS = "0x6e7BCbD91a8560E7Dc44F9c2179eae315B9BcDb4";
       if (

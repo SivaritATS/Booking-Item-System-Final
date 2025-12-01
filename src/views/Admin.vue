@@ -243,7 +243,6 @@
  * ============================================
  * ADMIN PANEL COMPONENT
  * ============================================
- * หน้านี้ใช้สำหรับ:
  * 1. เพิ่มสินค้าใหม่เข้า Smart Contract
  * 2. แสดงรายการสินค้าทั้งหมด
  * 3. จัดการสถานะสินค้า (Activate/Deactivate)
@@ -279,7 +278,7 @@ const newProduct = ref({
 // ============================================
 
 /**
- * แปลงค่า Wei เป็น Ether
+ * Converter Wei to Ether
  */
 const formatEther = (value) => ethers.formatEther(value);
 
