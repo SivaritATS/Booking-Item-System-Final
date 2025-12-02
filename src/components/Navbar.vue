@@ -3,7 +3,6 @@
     <div class="nav-container">
       <!-- Logo Section -->
       <router-link to="/" class="nav-brand">
-        <div class="brand-icon">🎫</div>
         <span class="brand-text">ระบบจองสินค้าด้วย Blockchain</span>
       </router-link>
 
@@ -16,6 +15,15 @@
         >
           <span class="nav-icon">🏠</span>
           <span class="nav-text">หน้าหลัก</span>
+        </router-link>
+
+        <router-link 
+          to="/my-bookings" 
+          class="nav-link"
+          :class="{ 'active': isMyBookingsPage }"
+        >
+          <span class="nav-icon">🎒</span>
+          <span class="nav-text">กระเป๋าของฉัน</span>
         </router-link>
 
         <router-link 
@@ -72,6 +80,7 @@ const { isConnected, isAdmin, shortAddress, connectWallet, disconnectWallet } = 
 
 // ตรวจสอบว่าอยู่หน้าไหน เพื่อ highlight เมนู
 const isHomePage = computed(() => route.path === '/');
+const isMyBookingsPage = computed(() => route.path === '/my-bookings');
 const isAdminPage = computed(() => route.path === '/admin');
 </script>
 

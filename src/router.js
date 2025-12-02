@@ -2,10 +2,12 @@ import { createRouter, createWebHistory } from "vue-router";
 import Home from "./views/Home.vue";
 import Book from "./views/Book.vue";
 import Admin from "./views/Admin.vue";
+import MyBookings from "./views/MyBookings.vue";
 
 const routes = [
   { path: "/", component: Home },
   { path: "/book/:id", component: Book },
+  { path: "/my-bookings", component: MyBookings },
   { path: "/admin", component: Admin, meta: { requiresAdmin: true } },
 ];
 

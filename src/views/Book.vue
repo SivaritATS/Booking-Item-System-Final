@@ -61,11 +61,14 @@
                 :disabled="
                   booking ||
                   !product.active ||
-                  product.bookedSlots >= product.maxSlots
+                  product.bookedSlots >= product.maxSlots ||
+                  hasBooked
                 "
                 class="confirm-button"
+                :class="{ 'is-booked': hasBooked }"
               >
                 <span v-if="booking">⏳ Processing...</span>
+                <span v-else-if="hasBooked">✅ คุณจองสินค้านี้ไปแล้ว</span>
                 <span v-else
                   >✨ ยืนยันการจอง {{ formatEther(product.price) }} ETH</span
                 >
@@ -94,22 +97,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ethers } from "ethers";
 import Swal from "sweetalert2";
 import abi from "../abi/BookingContract.json";
+import { useWallet } from "../store/wallet";
 
 // ใช้สำหรับดึงค่าจาก URL และเปลี่ยนหน้า
 const route = useRoute();
 const router = useRouter();
 const productId = route.params.id; // รับ ID สินค้าจาก URL
 
+// ใช้ Wallet Store
+const { account, isConnected } = useWallet();
+
 // ตัวแปรเก็บข้อมูลสินค้า
 const product = ref(null);
 const loading = ref(true); // สถานะโหลดข้อมูล
 const booking = ref(false); // สถานะกำลังจอง
 const error = ref(""); // เก็บข้อความ Error
+const hasBooked = ref(false); // สถานะว่าจองไปแล้วหรือยัง
 
 // แปลงหน่วยเงินจาก Wei เป็น Ether
 const formatEther = (value) => ethers.formatEther(value);
@@ -118,6 +126,24 @@ const formatEther = (value) => ethers.formatEther(value);
 const handleImageError = (e) => {
   e.target.src =
     "https://via.placeholder.com/600x400/6366f1/ffffff?text=Product+Image";
+};
+
+// ตรวจสอบสถานะการจอง
+const checkBookingStatus = async () => {
+  if (!isConnected.value || !account.value) return;
+
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+    const contract = new ethers.Contract(contractAddress, abi, provider);
+    
+    // ตรวจสอบว่า user ปัจจุบันจองสินค้านี้ไปแล้วหรือยัง
+    // ตาม ABI: hasBooked(uint256 productId, address user)
+    const booked = await contract.hasBooked(productId, account.value);
+    hasBooked.value = booked;
+  } catch (err) {
+    console.error("Error checking booking status:", err);
+  }
 };
 
 // ดึงข้อมูลสินค้าจาก Blockchain
@@ -182,6 +208,16 @@ const bookProduct = async () => {
     return;
   }
 
+  if (hasBooked.value) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'คุณจองสินค้านี้ไปแล้ว',
+      text: 'คุณสามารถจองได้เพียง 1 ชิ้นต่อสินค้าเท่านั้น',
+      confirmButtonColor: '#f59e0b'
+    });
+    return;
+  }
+
   booking.value = true;
   error.value = "";
 
@@ -210,6 +246,10 @@ const bookProduct = async () => {
     // รอให้ transaction เสร็จสมบูรณ์
     await tx.wait();
 
+    // อัพเดทสถานะการจอง
+    hasBooked.value = true;
+    product.value.bookedSlots = BigInt(product.value.bookedSlots) + 1n;
+
     // แจ้งเตือนสำเร็จและกลับหน้าแรก
     Swal.fire({
       icon: 'success',
@@ -218,26 +258,49 @@ const bookProduct = async () => {
       confirmButtonColor: '#10b981',
       timer: 2000
     }).then(() => {
-      router.push("/");
+      // router.push("/"); // ไม่ต้องกลับหน้าแรก ให้เห็นสถานะว่าจองแล้ว
     });
 
   } catch (err) {
     console.error("Booking error:", err);
-    error.value = err.reason || err.message || "Booking failed.";
-    Swal.fire({
-      icon: 'error',
-      title: 'การจองล้มเหลว',
-      text: error.value,
-      confirmButtonColor: '#ef4444'
-    });
+    // ตรวจสอบ error message ว่า user เคยจองไปแล้วหรือไม่ (เผื่อ checkBookingStatus ยังไม่ทำงานหรือมี race condition)
+    if (err.message && err.message.includes("User has already booked")) {
+       hasBooked.value = true;
+       Swal.fire({
+        icon: 'warning',
+        title: 'คุณจองสินค้านี้ไปแล้ว',
+        text: 'ระบบตรวจสอบพบว่าคุณได้ทำการจองสินค้านี้ไปแล้ว',
+        confirmButtonColor: '#f59e0b'
+      });
+    } else {
+      error.value = err.reason || err.message || "Booking failed.";
+      Swal.fire({
+        icon: 'error',
+        title: 'การจองล้มเหลว',
+        text: error.value,
+        confirmButtonColor: '#ef4444'
+      });
+    }
   } finally {
     booking.value = false;
   }
 };
 
 // เมื่อหน้าเว็บโหลดเสร็จ ให้ดึงข้อมูลสินค้า
-onMounted(() => {
-  fetchProduct();
+onMounted(async () => {
+  await fetchProduct();
+  if (isConnected.value) {
+    checkBookingStatus();
+  }
+});
+
+// ติดตามการเปลี่ยนแปลงของ account
+watch(account, (newAccount) => {
+  if (newAccount) {
+    checkBookingStatus();
+  } else {
+    hasBooked.value = false;
+  }
 });
 </script>
 
@@ -482,6 +545,14 @@ onMounted(() => {
   transform: none;
   box-shadow: none;
   opacity: 0.7;
+}
+
+.confirm-button.is-booked {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  opacity: 1 !important;
+  cursor: default;
+  box-shadow: none;
+  color: white;
 }
 
 .cancel-button,

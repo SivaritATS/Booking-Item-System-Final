@@ -1,7 +1,7 @@
 <template>
   <div class="home-page">
     <div class="hero-section">
-      <h1 class="hero-title fade-in">🎫 ยินดีต้อนรับเข้าสู้ระบบจองสินค้าด้วย Blockchain</h1>
+      <h1 class="hero-title fade-in">ยินดีต้อนรับเข้าสู้ระบบจองสินค้าด้วย Blockchain</h1>
     </div>
 
     <div class="container">
@@ -62,9 +62,10 @@
                   <div class="progress-bar">
                     <div
                       class="progress-fill"
+                      :class="getSlotClass(product)"
                       :style="{
                         width: `${
-                          (Number(product.bookedSlots) /
+                          ((Number(product.maxSlots) - Number(product.bookedSlots)) /
                             Number(product.maxSlots)) *
                           100
                         }%`,
@@ -72,7 +73,7 @@
                     ></div>
                   </div>
                   <span class="slots-text" :class="getSlotClass(product)">
-                    {{ product.bookedSlots.toString() }} /
+                    {{ (Number(product.maxSlots) - Number(product.bookedSlots)).toString() }} /
                     {{ product.maxSlots.toString() }} ชิ้น
                   </span>
                 </div>
@@ -138,11 +139,15 @@ const formatEther = (value) => ethers.formatEther(value);
 
 // คำนวณสีของสถานะสินค้าตามจำนวนที่เหลือ
 const getSlotClass = (product) => {
-  const percentage =
-    (Number(product.bookedSlots) / Number(product.maxSlots)) * 100;
-  if (percentage >= 90) return "slots-critical"; // เหลือสินค้าน้อยมาก (สีแดง)
-  if (percentage >= 50) return "slots-warning";  // เหลือสินค้าปานกลาง (สีเหลือง)
-  return "slots-available"; // เหลือสินค้าเยอะ (สีเขียว)
+  const booked = Number(product.bookedSlots);
+  const max = Number(product.maxSlots);
+
+  if (booked >= max) return "slots-critical"; // หมดแล้ว (สีแดง)
+  
+  const remainingPercentage = ((max - booked) / max) * 100;
+  if (remainingPercentage <= 50) return "slots-warning"; // เหลือ <= 50% (สีเหลือง)
+  
+  return "slots-available"; // เหลือ > 50% (สีเขียว)
 };
 
 // จัดการกรณีรูปภาพโหลดไม่สำเร็จ
@@ -515,14 +520,20 @@ onMounted(() => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    var(--success) 0%,
-    var(--warning) 50%,
-    var(--danger) 100%
-  );
   transition: width 0.3s ease;
   border-radius: 1rem;
+}
+
+.progress-fill.slots-available {
+  background: var(--success);
+}
+
+.progress-fill.slots-warning {
+  background: var(--warning);
+}
+
+.progress-fill.slots-critical {
+  background: var(--danger);
 }
 
 .slots-text {
